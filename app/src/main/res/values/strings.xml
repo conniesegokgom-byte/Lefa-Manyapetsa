@@ -1,0 +1,24 @@
+<resources>
+    <string name="app_name">PulseLive</string>
+    <string name="auth_tagline">WhatsApp-speed chats, real-time livestreams, and social feeds in one studio.</string>
+    <string name="auth_feature_chats_title">Real-Time Chats &amp; Lounges</string>
+    <string name="auth_feature_chats_desc">Direct messages, group rooms, and one-tap live invites.</string>
+    <string name="auth_feature_live_title">Go Live Instantly</string>
+    <string name="auth_feature_live_desc">Broadcast from your camera with live chat and floating hearts.</string>
+    <string name="auth_feature_feeds_title">Post Feeds &amp; Moments</string>
+    <string name="auth_feature_feeds_desc">Share updates, photos, and highlights with your community.</string>
+    <string name="sign_in_with_google">Continue with Google</string>
+    <string name="auth_footer_note">One-tap Google access • No email or password form required</string>
+    <string name="cd_hero_backdrop">PulseLive broadcast stage backdrop</string>
+    <string name="cd_empty_feed">Empty feed illustration</string>
+    <string name="tab_chats">Chats</string>
+    <string name="tab_calls">Calls</string>
+    <string name="tab_live">Live</string>
+    <string name="tab_feeds">Feeds</string>
+    <string name="voice_call">Voice Call</string>
+    <string name="video_call">Video Call</string>
+    <string name="go_live">Go Live</string>
+    <string name="new_chat">New Chat</string>
+    <string name="new_post">New Post</string>
+    <string name="sign_out">Sign Out</string>
+</resources>

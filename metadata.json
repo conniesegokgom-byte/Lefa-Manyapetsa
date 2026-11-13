@@ -1,0 +1,6 @@
+{
+  "name": "PulseLive",
+  "description": "Real-time messaging, live video broadcasts, and social feed posts in one unified app.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

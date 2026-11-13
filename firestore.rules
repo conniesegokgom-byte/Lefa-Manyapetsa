@@ -1,0 +1,440 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Global Safety Net: Default deny everything unless explicitly allowed below
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // --- Shared Primitives ---
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+    function incoming() {
+      return request.resource.data;
+    }
+    function existing() {
+      return resource.data;
+    }
+    function isSignedIn() {
+      return request.auth != null;
+    }
+    function isOwner() {
+      return isSignedIn() &&
+             'email' in request.auth.token &&
+             'email_verified' in request.auth.token &&
+             request.auth.token.email == 'conniesegokgom@gmail.com' &&
+             request.auth.token.email_verified == true;
+    }
+
+    // --- Validation Helpers ---
+    function isValidUserPublicProfile(data) {
+      return data.userId is string && data.userId.size() >= 1 && data.userId.size() <= 128 &&
+             data.displayName is string && data.displayName.size() >= 1 && data.displayName.size() <= 50 &&
+             data.role in ['owner', 'member', 'bot'] &&
+             data.isVerified is bool &&
+             data.discoverable is bool &&
+             data.isLive is bool &&
+             (!('bio' in data) || (data.bio is string && data.bio.size() <= 180)) &&
+             (!('statusText' in data) || (data.statusText is string && data.statusText.size() <= 80)) &&
+             (!('avatarColorHex' in data) || (data.avatarColorHex is string && data.avatarColorHex.size() <= 12)) &&
+             (!('activeStreamId' in data) || (data.activeStreamId is string && data.activeStreamId.size() <= 128));
+    }
+
+    function isValidChatRoom(data) {
+      return data.title is string && data.title.size() >= 1 && data.title.size() <= 80 &&
+             data.roomType in ['direct', 'group', 'lounge', 'bot'] &&
+             data.createdBy is string && data.createdBy.size() >= 1 && data.createdBy.size() <= 128 &&
+             data.participantUids is list && data.participantUids.size() >= 1 && data.participantUids.size() <= 30 &&
+             data.participantUids[0] is string &&
+             data.isPublic is bool &&
+             (!('participantNames' in data) || (data.participantNames is map && data.participantNames.size() <= 30)) &&
+             (!('lastMessageText' in data) || (data.lastMessageText is string && data.lastMessageText.size() <= 500)) &&
+             (!('lastMessageSenderId' in data) || (data.lastMessageSenderId is string && data.lastMessageSenderId.size() <= 128)) &&
+             (!('lastMessageSenderName' in data) || (data.lastMessageSenderName is string && data.lastMessageSenderName.size() <= 60)) &&
+             (!('linkedStreamId' in data) || (data.linkedStreamId is string && data.linkedStreamId.size() <= 128));
+    }
+
+    function isValidChatMessage(data) {
+      return data.roomId is string && data.roomId.size() >= 1 && data.roomId.size() <= 128 &&
+             data.senderId is string && data.senderId.size() >= 1 && data.senderId.size() <= 128 &&
+             data.senderName is string && data.senderName.size() >= 1 && data.senderName.size() <= 50 &&
+             data.text is string && data.text.size() <= 1000 &&
+             data.messageType in ['text', 'image', 'live_invite', 'bot_reply', 'bot_announcement', 'call_log'] &&
+             data.participantUids is list && data.participantUids.size() >= 1 && data.participantUids.size() <= 30 &&
+             data.participantUids[0] is string &&
+             data.isPublic is bool &&
+             (!('imageBase64' in data) || (data.imageBase64 is string && data.imageBase64.size() <= 350000)) &&
+             (!('linkedStreamId' in data) || (data.linkedStreamId is string && data.linkedStreamId.size() <= 128)) &&
+             (data.text.size() >= 1 || ('imageBase64' in data && data.imageBase64.size() >= 1));
+    }
+
+    function isValidCallSession(data) {
+      return data.callerId is string && data.callerId.size() >= 1 && data.callerId.size() <= 128 &&
+             data.callerName is string && data.callerName.size() >= 1 && data.callerName.size() <= 50 &&
+             data.calleeId is string && data.calleeId.size() >= 1 && data.calleeId.size() <= 128 &&
+             data.calleeName is string && data.calleeName.size() >= 1 && data.calleeName.size() <= 60 &&
+             data.participantUids is list && data.participantUids.size() >= 2 && data.participantUids.size() <= 30 &&
+             data.participantUids[0] is string &&
+             data.callType in ['voice', 'video'] &&
+             data.status in ['ringing', 'connected', 'ended', 'declined', 'missed'] &&
+             data.isVideoEnabledByCaller is bool &&
+             data.isVideoEnabledByCallee is bool &&
+             data.durationSeconds is int && data.durationSeconds >= 0 &&
+             (!('roomId' in data) || (data.roomId is string && data.roomId.size() <= 128));
+    }
+
+    function isValidLivestream(data) {
+      return data.hostId is string && data.hostId.size() >= 1 && data.hostId.size() <= 128 &&
+             data.hostName is string && data.hostName.size() >= 1 && data.hostName.size() <= 50 &&
+             data.title is string && data.title.size() >= 1 && data.title.size() <= 100 &&
+             data.category in ['Chill', 'Music', 'Gaming', 'Q&A', 'IRL', 'News'] &&
+             data.status in ['live', 'ended'] &&
+             data.visibility == 'public' &&
+             data.viewerCount is int && data.viewerCount >= 0 &&
+             data.likeCount is int && data.likeCount >= 0 &&
+             (!('linkedRoomId' in data) || (data.linkedRoomId is string && data.linkedRoomId.size() <= 128));
+    }
+
+    function isValidStreamComment(data) {
+      return data.streamId is string && data.streamId.size() >= 1 && data.streamId.size() <= 128 &&
+             data.authorId is string && data.authorId.size() >= 1 && data.authorId.size() <= 128 &&
+             data.authorName is string && data.authorName.size() >= 1 && data.authorName.size() <= 50 &&
+             data.text is string && data.text.size() >= 1 && data.text.size() <= 300 &&
+             data.streamVisibility == 'public';
+    }
+
+    function isValidFeedPost(data) {
+      return data.authorId is string && data.authorId.size() >= 1 && data.authorId.size() <= 128 &&
+             data.authorName is string && data.authorName.size() >= 1 && data.authorName.size() <= 50 &&
+             data.caption is string && data.caption.size() <= 1000 &&
+             data.category in ['Update', 'Photo', 'Live Clip', 'Announcement', 'Vibe'] &&
+             data.visibility == 'public' &&
+             data.likeCount is int && data.likeCount >= 0 &&
+             data.commentCount is int && data.commentCount >= 0 &&
+             (!('imageBase64' in data) || (data.imageBase64 is string && data.imageBase64.size() <= 350000)) &&
+             (!('imageUrl' in data) || (data.imageUrl is string && data.imageUrl.size() <= 2000)) &&
+             (data.caption.size() >= 1 || ('imageBase64' in data && data.imageBase64.size() >= 1) || ('imageUrl' in data && data.imageUrl.size() >= 1));
+    }
+
+    function isValidFeedLike(data) {
+      return data.postId is string && data.postId.size() >= 1 && data.postId.size() <= 128 &&
+             data.userId is string && data.userId.size() >= 1 && data.userId.size() <= 128 &&
+             data.postVisibility == 'public';
+    }
+
+    function isValidFeedComment(data) {
+      return data.postId is string && data.postId.size() >= 1 && data.postId.size() <= 128 &&
+             data.authorId is string && data.authorId.size() >= 1 && data.authorId.size() <= 128 &&
+             data.authorName is string && data.authorName.size() >= 1 && data.authorName.size() <= 50 &&
+             data.text is string && data.text.size() >= 1 && data.text.size() <= 500 &&
+             data.postVisibility == 'public';
+    }
+
+    // --- Collection Rules ---
+
+    // 1. Public User Directory & Verified Owner / System Bot (Zero PII)
+    match /users_public/{userId} {
+      allow get: if isSignedIn() && isValidId(userId) &&
+                    (request.auth.uid == userId || existing().discoverable == true || existing().userId == request.auth.uid);
+      allow list: if isSignedIn() &&
+                     (existing().discoverable == true || existing().userId == request.auth.uid);
+
+      allow create: if isSignedIn() && isValidId(userId) &&
+                       incoming().keys().hasAll(['userId', 'displayName', 'role', 'isVerified', 'discoverable', 'isLive', 'createdAt', 'updatedAt']) &&
+                       incoming().keys().hasOnly(['userId', 'displayName', 'bio', 'statusText', 'avatarColorHex', 'role', 'isVerified', 'discoverable', 'isLive', 'activeStreamId', 'createdAt', 'updatedAt']) &&
+                       incoming().createdAt is timestamp && incoming().createdAt <= request.time &&
+                       incoming().updatedAt is timestamp && incoming().updatedAt <= request.time &&
+                       isValidUserPublicProfile(incoming()) && (
+                         // Regular user or Owner registering their own profile (anti-privilege-escalation)
+                         (request.auth.uid == userId &&
+                          incoming().userId == request.auth.uid && (
+                            (isOwner() && incoming().role == 'owner' && incoming().isVerified == true) ||
+                            (!isOwner() && incoming().role == 'member' && incoming().isVerified == false)
+                          )) ||
+                         // Owner bootstrapping the System Bot profile
+                         (isOwner() &&
+                          userId == 'pulse_system_bot' &&
+                          incoming().userId == 'pulse_system_bot' &&
+                          incoming().role == 'bot' &&
+                          incoming().isVerified == true)
+                       );
+
+      allow update: if isSignedIn() && isValidId(userId) &&
+                       isValidUserPublicProfile(incoming()) &&
+                       incoming().userId == existing().userId &&
+                       incoming().createdAt == existing().createdAt &&
+                       incoming().updatedAt is timestamp && incoming().updatedAt <= request.time && (
+                         // Owner can verify/manage profiles and update their own OFFICIAL profile
+                         (isOwner() &&
+                          incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'bio', 'statusText', 'avatarColorHex', 'role', 'isVerified', 'discoverable', 'isLive', 'activeStreamId', 'updatedAt'])) ||
+                         // Regular user can edit non-RBAC fields of their own profile only
+                         (request.auth.uid == userId &&
+                          incoming().role == existing().role &&
+                          incoming().isVerified == existing().isVerified &&
+                          incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'bio', 'statusText', 'avatarColorHex', 'discoverable', 'isLive', 'activeStreamId', 'updatedAt']))
+                       );
+
+      allow delete: if isSignedIn() && isValidId(userId) && (request.auth.uid == userId || isOwner());
+    }
+
+    // 2. Chat Rooms & Messages
+    match /chat_rooms/{roomId} {
+      allow get: if isSignedIn() && isValidId(roomId) &&
+                    (request.auth.uid in existing().participantUids || existing().isPublic == true);
+      allow list: if isSignedIn() &&
+                     (request.auth.uid in existing().participantUids || existing().isPublic == true);
+
+      allow create: if isSignedIn() && isValidId(roomId) &&
+                       incoming().createdBy == request.auth.uid &&
+                       request.auth.uid in incoming().participantUids &&
+                       incoming().keys().hasAll(['title', 'roomType', 'createdBy', 'participantUids', 'isPublic', 'createdAt', 'updatedAt']) &&
+                       incoming().keys().hasOnly(['title', 'roomType', 'createdBy', 'participantUids', 'participantNames', 'isPublic', 'lastMessageText', 'lastMessageSenderId', 'lastMessageSenderName', 'linkedStreamId', 'createdAt', 'updatedAt']) &&
+                       incoming().createdAt is timestamp && incoming().createdAt <= request.time &&
+                       incoming().updatedAt is timestamp && incoming().updatedAt <= request.time &&
+                       isValidChatRoom(incoming()) &&
+                       (incoming().roomType != 'bot' || (roomId == 'bot_' + request.auth.uid && incoming().isPublic == false && incoming().participantUids.size() == 1));
+
+      allow update: if isSignedIn() && isValidId(roomId) &&
+                       isValidChatRoom(incoming()) &&
+                       incoming().createdBy == existing().createdBy &&
+                       incoming().roomType == existing().roomType &&
+                       incoming().isPublic == existing().isPublic &&
+                       incoming().createdAt == existing().createdAt &&
+                       incoming().updatedAt is timestamp && incoming().updatedAt <= request.time && (
+                         // Action A: Participant sends a message or links a livestream
+                         ((request.auth.uid in existing().participantUids || existing().isPublic == true) &&
+                          incoming().diff(existing()).affectedKeys().hasOnly(['lastMessageText', 'lastMessageSenderId', 'lastMessageSenderName', 'linkedStreamId', 'updatedAt'])) ||
+                         // Action B: User joins a public lounge
+                         (existing().isPublic == true &&
+                          request.auth.uid in incoming().participantUids &&
+                          incoming().diff(existing()).affectedKeys().hasOnly(['participantUids', 'participantNames', 'updatedAt'])) ||
+                         // Action C: Room creator or Owner updates title/participants
+                         ((existing().createdBy == request.auth.uid || isOwner()) &&
+                          incoming().diff(existing()).affectedKeys().hasOnly(['title', 'participantUids', 'participantNames', 'updatedAt']))
+                       );
+
+      allow delete: if isSignedIn() && isValidId(roomId) && (existing().createdBy == request.auth.uid || isOwner());
+
+      match /messages/{messageId} {
+        allow get: if isSignedIn() && isValidId(roomId) && isValidId(messageId) &&
+                      (request.auth.uid in existing().participantUids || existing().isPublic == true);
+        allow list: if isSignedIn() &&
+                       (request.auth.uid in existing().participantUids || existing().isPublic == true);
+
+        allow create: if isSignedIn() && isValidId(roomId) && isValidId(messageId) &&
+                         incoming().roomId == roomId &&
+                         (request.auth.uid in incoming().participantUids || incoming().isPublic == true) &&
+                         incoming().keys().hasAll(['roomId', 'senderId', 'senderName', 'text', 'messageType', 'participantUids', 'isPublic', 'createdAt']) &&
+                         incoming().keys().hasOnly(['roomId', 'senderId', 'senderName', 'text', 'messageType', 'imageBase64', 'linkedStreamId', 'participantUids', 'isPublic', 'createdAt']) &&
+                         incoming().createdAt is timestamp && incoming().createdAt <= request.time &&
+                         isValidChatMessage(incoming()) &&
+                         exists(/databases/$(database)/documents/chat_rooms/$(roomId)) &&
+                         (request.auth.uid in get(/databases/$(database)/documents/chat_rooms/$(roomId)).data.participantUids ||
+                          get(/databases/$(database)/documents/chat_rooms/$(roomId)).data.isPublic == true) && (
+                            // Standard user message or call log
+                            (incoming().senderId == request.auth.uid &&
+                             incoming().messageType in ['text', 'image', 'live_invite', 'call_log']) ||
+                            // System Bot reply inside the user's dedicated bot room
+                            (roomId == 'bot_' + request.auth.uid &&
+                             incoming().senderId == 'pulse_system_bot' &&
+                             incoming().messageType == 'bot_reply') ||
+                            // Owner posting an official System Bot announcement in any accessible room
+                            (isOwner() &&
+                             incoming().senderId == 'pulse_system_bot' &&
+                             incoming().messageType == 'bot_announcement')
+                         );
+
+        allow update: if false;
+        allow delete: if isSignedIn() && isValidId(roomId) && isValidId(messageId) &&
+                         (existing().senderId == request.auth.uid || isOwner());
+      }
+    }
+
+    // 3. Livestreams & Live Comments
+    match /livestreams/{streamId} {
+      allow get: if isSignedIn() && isValidId(streamId) &&
+                    (existing().visibility == 'public' || existing().hostId == request.auth.uid);
+      allow list: if isSignedIn() &&
+                     (existing().visibility == 'public' || existing().hostId == request.auth.uid);
+
+      allow create: if isSignedIn() && isValidId(streamId) &&
+                       incoming().hostId == request.auth.uid &&
+                       incoming().status == 'live' &&
+                       incoming().visibility == 'public' &&
+                       incoming().viewerCount == 1 &&
+                       incoming().likeCount == 0 &&
+                       incoming().keys().hasAll(['hostId', 'hostName', 'title', 'category', 'status', 'visibility', 'viewerCount', 'likeCount', 'createdAt', 'updatedAt']) &&
+                       incoming().keys().hasOnly(['hostId', 'hostName', 'title', 'category', 'status', 'visibility', 'viewerCount', 'likeCount', 'linkedRoomId', 'createdAt', 'updatedAt']) &&
+                       incoming().createdAt is timestamp && incoming().createdAt <= request.time &&
+                       incoming().updatedAt is timestamp && incoming().updatedAt <= request.time &&
+                       isValidLivestream(incoming());
+
+      allow update: if isSignedIn() && isValidId(streamId) &&
+                       isValidLivestream(incoming()) &&
+                       existing().status == 'live' &&
+                       incoming().hostId == existing().hostId &&
+                       incoming().visibility == existing().visibility &&
+                       incoming().createdAt == existing().createdAt &&
+                       incoming().updatedAt is timestamp && incoming().updatedAt <= request.time && (
+                         // Action A: Host or Owner updates stream details or ends broadcast
+                         ((existing().hostId == request.auth.uid || isOwner()) &&
+                          incoming().diff(existing()).affectedKeys().hasOnly(['title', 'category', 'status', 'updatedAt'])) ||
+                         // Action B: Viewer/Host sends floating hearts or updates viewer presence
+                         (incoming().likeCount >= existing().likeCount &&
+                          incoming().likeCount <= existing().likeCount + 10 &&
+                          incoming().viewerCount >= 0 &&
+                          incoming().diff(existing()).affectedKeys().hasOnly(['likeCount', 'viewerCount', 'updatedAt']))
+                       );
+
+      allow delete: if isSignedIn() && isValidId(streamId) && (existing().hostId == request.auth.uid || isOwner());
+
+      match /comments/{commentId} {
+        allow get: if isSignedIn() && isValidId(streamId) && isValidId(commentId) &&
+                      (existing().streamVisibility == 'public' || existing().authorId == request.auth.uid);
+        allow list: if isSignedIn() &&
+                       (existing().streamVisibility == 'public' || existing().authorId == request.auth.uid);
+
+        allow create: if isSignedIn() && isValidId(streamId) && isValidId(commentId) &&
+                         incoming().streamId == streamId &&
+                         incoming().authorId == request.auth.uid &&
+                         incoming().streamVisibility == 'public' &&
+                         incoming().keys().hasAll(['streamId', 'authorId', 'authorName', 'text', 'streamVisibility', 'createdAt']) &&
+                         incoming().keys().hasOnly(['streamId', 'authorId', 'authorName', 'text', 'streamVisibility', 'createdAt']) &&
+                         incoming().createdAt is timestamp && incoming().createdAt <= request.time &&
+                         isValidStreamComment(incoming()) &&
+                         exists(/databases/$(database)/documents/livestreams/$(streamId));
+
+        allow update: if false;
+        allow delete: if isSignedIn() && isValidId(streamId) && isValidId(commentId) &&
+                         (existing().authorId == request.auth.uid || isOwner());
+      }
+    }
+
+    // 4. Social Feed Posts, Likes & Comments
+    match /feed_posts/{postId} {
+      allow get: if isSignedIn() && isValidId(postId) &&
+                    (existing().visibility == 'public' || existing().authorId == request.auth.uid);
+      allow list: if isSignedIn() &&
+                     (existing().visibility == 'public' || existing().authorId == request.auth.uid);
+
+      allow create: if isSignedIn() && isValidId(postId) &&
+                       (incoming().authorId == request.auth.uid ||
+                        (isOwner() && incoming().authorId == 'pulse_system_bot' && incoming().category == 'Announcement')) &&
+                       incoming().visibility == 'public' &&
+                       incoming().likeCount == 0 &&
+                       incoming().commentCount == 0 &&
+                       incoming().keys().hasAll(['authorId', 'authorName', 'caption', 'category', 'visibility', 'likeCount', 'commentCount', 'createdAt', 'updatedAt']) &&
+                       incoming().keys().hasOnly(['authorId', 'authorName', 'caption', 'category', 'imageBase64', 'imageUrl', 'visibility', 'likeCount', 'commentCount', 'createdAt', 'updatedAt']) &&
+                       incoming().createdAt is timestamp && incoming().createdAt <= request.time &&
+                       incoming().updatedAt is timestamp && incoming().updatedAt <= request.time &&
+                       isValidFeedPost(incoming());
+
+      allow update: if isSignedIn() && isValidId(postId) &&
+                       isValidFeedPost(incoming()) &&
+                       incoming().authorId == existing().authorId &&
+                       incoming().visibility == existing().visibility &&
+                       incoming().createdAt == existing().createdAt &&
+                       incoming().updatedAt is timestamp && incoming().updatedAt <= request.time && (
+                         // Action A: Author or Owner edits caption or category
+                         ((existing().authorId == request.auth.uid || isOwner()) &&
+                          incoming().diff(existing()).affectedKeys().hasOnly(['caption', 'category', 'updatedAt'])) ||
+                         // Action B: Atomic Like / Unlike synchronized with likes/{uid}
+                         (incoming().diff(existing()).affectedKeys().hasOnly(['likeCount', 'updatedAt']) && (
+                           (incoming().likeCount == existing().likeCount + 1 &&
+                            existsAfter(/databases/$(database)/documents/feed_posts/$(postId)/likes/$(request.auth.uid))) ||
+                           (incoming().likeCount == existing().likeCount - 1 &&
+                            incoming().likeCount >= 0 &&
+                            !existsAfter(/databases/$(database)/documents/feed_posts/$(postId)/likes/$(request.auth.uid)))
+                         )) ||
+                         // Action C: Increment commentCount when adding a comment
+                         (incoming().diff(existing()).affectedKeys().hasOnly(['commentCount', 'updatedAt']) &&
+                          incoming().commentCount == existing().commentCount + 1)
+                       );
+
+      allow delete: if isSignedIn() && isValidId(postId) && (existing().authorId == request.auth.uid || isOwner());
+
+      match /likes/{userId} {
+        allow get: if isSignedIn() && isValidId(postId) && isValidId(userId) &&
+                      (request.auth.uid == userId || existing().postVisibility == 'public' || existing().userId == request.auth.uid);
+        allow list: if isSignedIn() &&
+                       (existing().postVisibility == 'public' || existing().userId == request.auth.uid);
+
+        allow create: if isSignedIn() && isValidId(postId) && isValidId(userId) &&
+                         request.auth.uid == userId &&
+                         incoming().postId == postId &&
+                         incoming().userId == request.auth.uid &&
+                         incoming().postVisibility == 'public' &&
+                         incoming().keys().hasAll(['postId', 'userId', 'postVisibility', 'createdAt']) &&
+                         incoming().keys().hasOnly(['postId', 'userId', 'postVisibility', 'createdAt']) &&
+                         incoming().createdAt is timestamp && incoming().createdAt <= request.time &&
+                         isValidFeedLike(incoming()) &&
+                         exists(/databases/$(database)/documents/feed_posts/$(postId));
+
+        allow update: if false;
+        allow delete: if isSignedIn() && isValidId(postId) && isValidId(userId) &&
+                         request.auth.uid == userId;
+      }
+
+      match /comments/{commentId} {
+        allow get: if isSignedIn() && isValidId(postId) && isValidId(commentId) &&
+                      (existing().postVisibility == 'public' || existing().authorId == request.auth.uid);
+        allow list: if isSignedIn() &&
+                       (existing().postVisibility == 'public' || existing().authorId == request.auth.uid);
+
+        allow create: if isSignedIn() && isValidId(postId) && isValidId(commentId) &&
+                         incoming().postId == postId &&
+                         incoming().authorId == request.auth.uid &&
+                         incoming().postVisibility == 'public' &&
+                         incoming().keys().hasAll(['postId', 'authorId', 'authorName', 'text', 'postVisibility', 'createdAt']) &&
+                         incoming().keys().hasOnly(['postId', 'authorId', 'authorName', 'text', 'postVisibility', 'createdAt']) &&
+                         incoming().createdAt is timestamp && incoming().createdAt <= request.time &&
+                         isValidFeedComment(incoming()) &&
+                         exists(/databases/$(database)/documents/feed_posts/$(postId));
+
+        allow update: if false;
+        allow delete: if isSignedIn() && isValidId(postId) && isValidId(commentId) &&
+                         (existing().authorId == request.auth.uid || isOwner());
+      }
+    }
+
+    // 5. Real-Time Voice & Video Calls
+    match /calls/{callId} {
+      allow get: if isSignedIn() && isValidId(callId) &&
+                    (request.auth.uid in existing().participantUids || isOwner());
+      allow list: if isSignedIn() &&
+                     (request.auth.uid in existing().participantUids || isOwner());
+
+      allow create: if isSignedIn() && isValidId(callId) &&
+                       incoming().callerId == request.auth.uid &&
+                       request.auth.uid in incoming().participantUids &&
+                       incoming().status == 'ringing' &&
+                       incoming().durationSeconds == 0 &&
+                       incoming().keys().hasAll(['callerId', 'callerName', 'calleeId', 'calleeName', 'participantUids', 'callType', 'status', 'isVideoEnabledByCaller', 'isVideoEnabledByCallee', 'durationSeconds', 'createdAt', 'updatedAt']) &&
+                       incoming().keys().hasOnly(['callerId', 'callerName', 'calleeId', 'calleeName', 'participantUids', 'roomId', 'callType', 'status', 'isVideoEnabledByCaller', 'isVideoEnabledByCallee', 'durationSeconds', 'createdAt', 'updatedAt']) &&
+                       incoming().createdAt is timestamp && incoming().createdAt <= request.time &&
+                       incoming().updatedAt is timestamp && incoming().updatedAt <= request.time &&
+                       isValidCallSession(incoming());
+
+      allow update: if isSignedIn() && isValidId(callId) &&
+                       isValidCallSession(incoming()) &&
+                       (request.auth.uid in existing().participantUids || isOwner()) &&
+                       !(existing().status in ['ended', 'declined', 'missed']) &&
+                       incoming().callerId == existing().callerId &&
+                       incoming().calleeId == existing().calleeId &&
+                       incoming().participantUids == existing().participantUids &&
+                       incoming().createdAt == existing().createdAt &&
+                       incoming().updatedAt is timestamp && incoming().updatedAt <= request.time &&
+                       incoming().diff(existing()).affectedKeys().hasOnly(['status', 'callType', 'isVideoEnabledByCaller', 'isVideoEnabledByCallee', 'durationSeconds', 'updatedAt']);
+
+      allow delete: if isSignedIn() && isValidId(callId) &&
+                       (existing().callerId == request.auth.uid || isOwner());
+    }
+
+    // Collection group rule so users can observe their own likes across feed posts
+    match /{path=**}/likes/{userId} {
+      allow list: if isSignedIn() && existing().userId == request.auth.uid;
+    }
+  }
+}

@@ -1,0 +1,278 @@
+{
+  "entities": {
+    "UserPublicProfile": {
+      "title": "UserPublicProfile",
+      "description": "Publicly discoverable user or system bot profile without PII.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "Authenticated user UID or pulse_system_bot." },
+        "displayName": { "type": "string", "description": "Public display name (OFFICIAL for owner)." },
+        "bio": { "type": "string", "description": "Short user bio." },
+        "statusText": { "type": "string", "description": "WhatsApp-style status tagline." },
+        "avatarColorHex": { "type": "string", "description": "Hex color accent for user avatar badge." },
+        "role": { "type": "string", "enum": ["owner", "member", "bot"], "description": "Verified role badge." },
+        "isVerified": { "type": "boolean", "description": "True for verified CEO/owner and system bot." },
+        "discoverable": { "type": "boolean", "description": "Whether profile appears in community directory." },
+        "isLive": { "type": "boolean", "description": "True when user is currently hosting a livestream." },
+        "activeStreamId": { "type": "string", "description": "Document ID of active livestream when isLive is true." },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Server timestamp (FieldValue.serverTimestamp())." },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Server timestamp (FieldValue.serverTimestamp())." }
+      },
+      "required": [
+        "userId",
+        "displayName",
+        "role",
+        "isVerified",
+        "discoverable",
+        "isLive",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "ChatRoom": {
+      "title": "ChatRoom",
+      "description": "Direct, group, public lounge, or system bot chat room.",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string", "description": "Room or conversation display title." },
+        "roomType": { "type": "string", "enum": ["direct", "group", "lounge", "bot"], "description": "Conversation category." },
+        "createdBy": { "type": "string", "description": "UID of room creator." },
+        "participantUids": { "type": "array", "description": "Bounded list of participant UIDs (max 30)." },
+        "participantNames": { "type": "object", "description": "Map of UID to display name." },
+        "isPublic": { "type": "boolean", "description": "True for open community lounges." },
+        "lastMessageText": { "type": "string", "description": "Preview of the latest message." },
+        "lastMessageSenderId": { "type": "string", "description": "UID of latest message sender." },
+        "lastMessageSenderName": { "type": "string", "description": "Display name of latest message sender." },
+        "linkedStreamId": { "type": "string", "description": "Optional active livestream linked to this chat." },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Server timestamp (FieldValue.serverTimestamp())." },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Server timestamp (FieldValue.serverTimestamp())." }
+      },
+      "required": [
+        "title",
+        "roomType",
+        "createdBy",
+        "participantUids",
+        "isPublic",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "ChatMessage": {
+      "title": "ChatMessage",
+      "description": "Message inside a chat room including system bot replies.",
+      "type": "object",
+      "properties": {
+        "roomId": { "type": "string", "description": "Parent chat room ID." },
+        "senderId": { "type": "string", "description": "UID of message sender or pulse_system_bot." },
+        "senderName": { "type": "string", "description": "Display name of message sender." },
+        "text": { "type": "string", "description": "Message text body." },
+        "messageType": { "type": "string", "enum": ["text", "image", "live_invite", "bot_reply", "bot_announcement", "call_log"], "description": "Message payload type." },
+        "imageBase64": { "type": "string", "description": "Optional compressed JPEG base64 image." },
+        "linkedStreamId": { "type": "string", "description": "Optional livestream ID." },
+        "participantUids": { "type": "array", "description": "Denormalized participant UIDs from parent room." },
+        "isPublic": { "type": "boolean", "description": "Denormalized public flag from parent room." },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Server timestamp (FieldValue.serverTimestamp())." }
+      },
+      "required": [
+        "roomId",
+        "senderId",
+        "senderName",
+        "text",
+        "messageType",
+        "participantUids",
+        "isPublic",
+        "createdAt"
+      ]
+    },
+    "Livestream": {
+      "title": "Livestream",
+      "description": "Live broadcast room metadata, viewer count, and hearts.",
+      "type": "object",
+      "properties": {
+        "hostId": { "type": "string", "description": "UID of the stream host." },
+        "hostName": { "type": "string", "description": "Display name of the stream host." },
+        "title": { "type": "string", "description": "Stream broadcast title." },
+        "category": { "type": "string", "enum": ["Chill", "Music", "Gaming", "Q&A", "IRL", "News"], "description": "Stream topic category." },
+        "status": { "type": "string", "enum": ["live", "ended"], "description": "Broadcast lifecycle state." },
+        "visibility": { "type": "string", "enum": ["public"], "description": "Stream visibility." },
+        "viewerCount": { "type": "integer", "description": "Current viewer count." },
+        "likeCount": { "type": "integer", "description": "Total floating heart reactions." },
+        "linkedRoomId": { "type": "string", "description": "Optional chat room associated with this stream." },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Server timestamp (FieldValue.serverTimestamp())." },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Server timestamp (FieldValue.serverTimestamp())." }
+      },
+      "required": [
+        "hostId",
+        "hostName",
+        "title",
+        "category",
+        "status",
+        "visibility",
+        "viewerCount",
+        "likeCount",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "StreamComment": {
+      "title": "StreamComment",
+      "description": "Live chat message overlaid on a livestream.",
+      "type": "object",
+      "properties": {
+        "streamId": { "type": "string", "description": "Parent livestream ID." },
+        "authorId": { "type": "string", "description": "Comment author UID." },
+        "authorName": { "type": "string", "description": "Comment author display name." },
+        "text": { "type": "string", "description": "Comment text." },
+        "streamVisibility": { "type": "string", "enum": ["public"], "description": "Denormalized stream visibility." },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Server timestamp (FieldValue.serverTimestamp())." }
+      },
+      "required": [
+        "streamId",
+        "authorId",
+        "authorName",
+        "text",
+        "streamVisibility",
+        "createdAt"
+      ]
+    },
+    "FeedPost": {
+      "title": "FeedPost",
+      "description": "Social feed post with caption, optional photo, and counters.",
+      "type": "object",
+      "properties": {
+        "authorId": { "type": "string", "description": "Post author UID or pulse_system_bot." },
+        "authorName": { "type": "string", "description": "Post author display name." },
+        "caption": { "type": "string", "description": "Post text content." },
+        "category": { "type": "string", "enum": ["Update", "Photo", "Live Clip", "Announcement", "Vibe"], "description": "Feed post category tag." },
+        "imageBase64": { "type": "string", "description": "Optional compressed photo payload." },
+        "imageUrl": { "type": "string", "description": "Optional HTTPS image URL for the post." },
+        "visibility": { "type": "string", "enum": ["public"], "description": "Post visibility." },
+        "likeCount": { "type": "integer", "description": "Total likes on this post." },
+        "commentCount": { "type": "integer", "description": "Total comments on this post." },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Server timestamp (FieldValue.serverTimestamp())." },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Server timestamp (FieldValue.serverTimestamp())." }
+      },
+      "required": [
+        "authorId",
+        "authorName",
+        "caption",
+        "category",
+        "visibility",
+        "likeCount",
+        "commentCount",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "FeedLike": {
+      "title": "FeedLike",
+      "description": "User like record under a feed post.",
+      "type": "object",
+      "properties": {
+        "postId": { "type": "string", "description": "Parent post ID." },
+        "userId": { "type": "string", "description": "Liking user UID." },
+        "postVisibility": { "type": "string", "enum": ["public"], "description": "Denormalized post visibility." },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Server timestamp (FieldValue.serverTimestamp())." }
+      },
+      "required": [
+        "postId",
+        "userId",
+        "postVisibility",
+        "createdAt"
+      ]
+    },
+    "FeedComment": {
+      "title": "FeedComment",
+      "description": "Comment on a feed post.",
+      "type": "object",
+      "properties": {
+        "postId": { "type": "string", "description": "Parent post ID." },
+        "authorId": { "type": "string", "description": "Comment author UID." },
+        "authorName": { "type": "string", "description": "Comment author display name." },
+        "text": { "type": "string", "description": "Comment body." },
+        "postVisibility": { "type": "string", "enum": ["public"], "description": "Denormalized post visibility." },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Server timestamp (FieldValue.serverTimestamp())." }
+      },
+      "required": [
+        "postId",
+        "authorId",
+        "authorName",
+        "text",
+        "postVisibility",
+        "createdAt"
+      ]
+    },
+    "CallSession": {
+      "title": "CallSession",
+      "description": "Real-time voice or video call signaling and call history record.",
+      "type": "object",
+      "properties": {
+        "callerId": { "type": "string", "description": "UID of the user initiating the call." },
+        "callerName": { "type": "string", "description": "Display name of the caller." },
+        "calleeId": { "type": "string", "description": "Primary target user UID or room target ID." },
+        "calleeName": { "type": "string", "description": "Display name of callee or room." },
+        "participantUids": { "type": "array", "description": "UIDs authorized to join and view this call." },
+        "roomId": { "type": "string", "description": "Optional linked chat room ID." },
+        "callType": { "type": "string", "enum": ["voice", "video"], "description": "Voice or video call." },
+        "status": { "type": "string", "enum": ["ringing", "connected", "ended", "declined", "missed"], "description": "Real-time call state." },
+        "isVideoEnabledByCaller": { "type": "boolean", "description": "Whether caller camera is active." },
+        "isVideoEnabledByCallee": { "type": "boolean", "description": "Whether callee camera is active." },
+        "durationSeconds": { "type": "integer", "description": "Total connected duration in seconds." },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Server timestamp." },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Server timestamp." }
+      },
+      "required": [
+        "callerId",
+        "callerName",
+        "calleeId",
+        "calleeName",
+        "participantUids",
+        "callType",
+        "status",
+        "isVideoEnabledByCaller",
+        "isVideoEnabledByCallee",
+        "durationSeconds",
+        "createdAt",
+        "updatedAt"
+      ]
+    }
+  },
+  "firestore": {
+    "/users_public/{userId}": {
+      "schema": { "$ref": "#/entities/UserPublicProfile" },
+      "description": "Publicly discoverable community user and system bot profiles (no PII)."
+    },
+    "/chat_rooms/{roomId}": {
+      "schema": { "$ref": "#/entities/ChatRoom" },
+      "description": "Direct, group, public lounge, and system bot chat rooms."
+    },
+    "/chat_rooms/{roomId}/messages/{messageId}": {
+      "schema": { "$ref": "#/entities/ChatMessage" },
+      "description": "Messages belonging to a chat room."
+    },
+    "/calls/{callId}": {
+      "schema": { "$ref": "#/entities/CallSession" },
+      "description": "Voice and video call signaling and history records."
+    },
+    "/livestreams/{streamId}": {
+      "schema": { "$ref": "#/entities/Livestream" },
+      "description": "Live broadcast rooms and ended stream summaries."
+    },
+    "/livestreams/{streamId}/comments/{commentId}": {
+      "schema": { "$ref": "#/entities/StreamComment" },
+      "description": "Live chat comments for a livestream."
+    },
+    "/feed_posts/{postId}": {
+      "schema": { "$ref": "#/entities/FeedPost" },
+      "description": "Community social feed posts."
+    },
+    "/feed_posts/{postId}/likes/{userId}": {
+      "schema": { "$ref": "#/entities/FeedLike" },
+      "description": "Like records per post per user."
+    },
+    "/feed_posts/{postId}/comments/{commentId}": {
+      "schema": { "$ref": "#/entities/FeedComment" },
+      "description": "Comments on a feed post."
+    }
+  }
+}
